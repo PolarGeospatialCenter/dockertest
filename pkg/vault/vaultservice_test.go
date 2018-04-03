@@ -11,6 +11,9 @@ func TestRunVault(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	config, rootToken := Run(ctx)
+	if rootToken == "" {
+		t.Fatal("no root token returned, error")
+	}
 	client, err := vault.NewClient(config)
 	if err != nil {
 		t.Fatalf("Unable to create vault client: %v", err)
