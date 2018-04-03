@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
 	"time"
 
 	dockertypes "github.com/docker/docker/api/types"
@@ -35,14 +36,20 @@ func (t *Container) Run(ctx context.Context) error {
 
 	networkConfig := &network.NetworkingConfig{}
 
-	_, err = cli.ImagePull(ctx, containerConfig.Image, dockertypes.ImagePullOptions{})
+	status, err := cli.ImagePull(ctx, containerConfig.Image, dockertypes.ImagePullOptions{})
 	if err != nil {
 		return fmt.Errorf("unable to pull image: %v", err)
 	}
 
+	_, err = ioutil.ReadAll(status)
+	if err != nil {
+		return fmt.Errorf("unable to read status from image pull: %v", err)
+	}
+	status.Close()
+
 	c, err := cli.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, "")
 	if err != nil {
-		return err
+		return fmt.Errorf("unable to create container: %v", err)
 	}
 
 	t.containerID = c.ID
