@@ -3,6 +3,7 @@ package vault
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"github.com/PolarGeospatialCenter/dockertest/pkg/docker"
@@ -36,8 +37,25 @@ func Run(ctx context.Context) (*Instance, error) {
 
 	instance.config = vault.DefaultConfig()
 	instance.config.Address = fmt.Sprintf("http://127.0.0.1:%s", port)
-	time.Sleep(500 * time.Millisecond)
-	return instance, nil
+
+	timeout := time.After(10 * time.Second)
+	checkInterval := time.Tick(50 * time.Millisecond)
+	for {
+		select {
+		case <-timeout:
+			return nil, fmt.Errorf("vault failed to start after 10 seconds")
+		case <-checkInterval:
+			if instance.running() {
+				return instance, nil
+			}
+		}
+	}
+}
+
+func (i *Instance) running() bool {
+	c := http.Client{}
+	resp, err := c.Get(fmt.Sprintf("%s/v1/sys/seal-status", i.Config().Address))
+	return err == nil && resp.StatusCode == 200
 }
 
 func (i *Instance) Config() *vault.Config {
