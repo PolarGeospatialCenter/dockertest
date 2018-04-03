@@ -1,27 +1,24 @@
-package vaulttest
+package docker
 
 import (
 	"context"
 	"fmt"
-	"log"
+	"time"
 
-	docker "docker.io/go-docker"
-	dockertypes "docker.io/go-docker/api/types"
-	"docker.io/go-docker/api/types/container"
-	"docker.io/go-docker/api/types/network"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/dynamodb"
+	dockertypes "github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/network"
+	docker "github.com/docker/docker/client"
 	"github.com/docker/go-connections/nat"
 )
 
-type TestContainer struct {
+type Container struct {
 	Image       string
 	Cmd         []string
 	containerID string
 }
 
-func (t *TestContainer) Run(ctx context.Context) error {
+func (t *Container) Run(ctx context.Context) error {
 	cli, err := docker.NewEnvClient()
 	if err != nil {
 		return err
@@ -38,6 +35,11 @@ func (t *TestContainer) Run(ctx context.Context) error {
 
 	networkConfig := &network.NetworkingConfig{}
 
+	_, err = cli.ImagePull(ctx, containerConfig.Image, dockertypes.ImagePullOptions{})
+	if err != nil {
+		return fmt.Errorf("unable to pull image: %v", err)
+	}
+
 	c, err := cli.ContainerCreate(ctx, containerConfig, hostConfig, networkConfig, "")
 	if err != nil {
 		return err
@@ -51,7 +53,7 @@ func (t *TestContainer) Run(ctx context.Context) error {
 	return nil
 }
 
-func (t *TestContainer) GetPort(ctx context.Context, port string) (string, error) {
+func (t *Container) GetPort(ctx context.Context, port string) (string, error) {
 	cli, err := docker.NewEnvClient()
 	if err != nil {
 		return "", err
@@ -64,51 +66,30 @@ func (t *TestContainer) GetPort(ctx context.Context, port string) (string, error
 
 	ports := data.NetworkSettings.Ports
 	hostPort := ports[nat.Port(port)][0].HostPort
+
 	return hostPort, nil
 }
 
-func (t *TestContainer) Stop(ctx context.Context) error {
+func (t *Container) Stop(ctx context.Context) error {
 	cli, err := docker.NewEnvClient()
 	if err != nil {
 		return err
 	}
 
-	log.Printf("Killing container %s", t.containerID)
-	err = cli.ContainerKill(ctx, t.containerID, "SIGINT")
+	err = cli.ContainerKill(ctx, t.containerID, "SIGKILL")
 	if err != nil {
 		return fmt.Errorf("error killing container %s: %v", t.containerID, err)
 	}
 
-	log.Printf("Waiting for container %s", t.containerID)
-	ok, errCh := cli.ContainerWait(ctx, t.containerID, container.WaitConditionNotRunning)
-	select {
-	case <-ok:
-		log.Printf("Container stopped")
-		break
-	case e := <-errCh:
-		return fmt.Errorf("error waiting for container to exit: %v", e)
+	toCtx, _ := context.WithTimeout(ctx, 1*time.Second)
+	_, err = cli.ContainerWait(toCtx, t.containerID)
+	if err != nil {
+		return err
 	}
 
-	log.Printf("Removing container %s", t.containerID)
 	err = cli.ContainerRemove(ctx, t.containerID, dockertypes.ContainerRemoveOptions{})
 	if err != nil {
 		return fmt.Errorf("error removing container %s: %v", t.containerID, err)
 	}
 	return nil
-}
-
-func startDynamoDB(ctx context.Context) (*dynamodb.DynamoDB, error) {
-	c := &TestContainer{Image: "deangiberson/aws-dynamodb-local"}
-
-	c.Run(ctx)
-	defer c.Stop(ctx)
-	port, err := c.GetPort(ctx, "8000/tcp")
-	if err != nil {
-		return nil, err
-	}
-
-	endpoint := fmt.Sprintf("http://localhost:%s", port)
-	region := "us-east-2"
-	db := dynamodb.New(session.New(&aws.Config{Endpoint: &endpoint, Region: &region}))
-	return db, nil
 }
