@@ -1,4 +1,4 @@
-package vaulttest
+package vault
 
 import (
 	"context"
@@ -8,15 +8,19 @@ import (
 )
 
 func TestRunVault(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-	config, rootToken := Run(ctx)
-	client, err := vault.NewClient(config)
+	ctx := context.Background()
+	instance, err := Run(ctx)
+	if err != nil {
+		t.Errorf("unable to create vault instance: %v", err)
+	}
+	defer instance.Stop(ctx)
+
+	client, err := vault.NewClient(instance.Config())
 	if err != nil {
 		t.Fatalf("Unable to create vault client: %v", err)
 	}
 
-	client.SetToken(rootToken)
+	client.SetToken(instance.RootToken())
 	data := make(map[string]interface{})
 	data["test"] = "Hello Vault!"
 	_, err = client.Logical().Write("secret/test", data)
@@ -26,7 +30,7 @@ func TestRunVault(t *testing.T) {
 
 	secret, err := client.Logical().Read("secret/test")
 	if err != nil {
-		t.Errorf("Unable to read test value from vault: %v", err)
+		t.Fatalf("Unable to read test value from vault: %v", err)
 	}
 
 	if testString, ok := secret.Data["test"].(string); !ok || testString != "Hello Vault!" {
