@@ -6,6 +6,7 @@ import (
 
 	"github.com/PolarGeospatialCenter/dockertest/pkg/docker"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/credentials"
 )
 
 type Instance struct {
@@ -25,9 +26,11 @@ func Run(ctx context.Context) (*Instance, error) {
 		return nil, err
 	}
 
-	endpoint := fmt.Sprintf("http://localhost:%s", port)
-	region := "us-east-2"
-	i.config = &aws.Config{Endpoint: &endpoint, Region: &region}
+	i.config = &aws.Config{}
+	i.config.WithEndpoint(fmt.Sprintf("http://localhost:%s", port))
+	i.config.WithRegion("us-east-2")
+	i.config.WithCredentials(credentials.NewStaticCredentials("fake_id", "bad_secret", "bad_token"))
+
 	return i, nil
 }
 
