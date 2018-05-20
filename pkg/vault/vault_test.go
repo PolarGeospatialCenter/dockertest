@@ -22,18 +22,27 @@ func TestRunVault(t *testing.T) {
 
 	client.SetToken(instance.RootToken())
 	data := make(map[string]interface{})
-	data["test"] = "Hello Vault!"
-	_, err = client.Logical().Write("secret/test", data)
+	innerData := make(map[string]interface{})
+	innerData["test"] = "Hello Vault!"
+	data["data"] = innerData
+
+	t.Logf("%v", data)
+	_, err = client.Logical().Write("secret/data/test", data)
 	if err != nil {
 		t.Errorf("Unable to write test value to vault: %v", err)
 	}
 
-	secret, err := client.Logical().Read("secret/test")
+	secret, err := client.Logical().Read("secret/data/test")
 	if err != nil {
 		t.Fatalf("Unable to read test value from vault: %v", err)
 	}
 
-	if testString, ok := secret.Data["test"].(string); !ok || testString != "Hello Vault!" {
+	t.Logf("Returned: %v", secret)
+	resultData, ok := secret.Data["data"].(map[string]interface{})
+	if !ok {
+		t.Errorf("Invalid data returned from vault: %v", secret.Data)
+	}
+	if testString, ok := resultData["test"].(string); !ok || testString != "Hello Vault!" {
 		t.Errorf("Wrong value returned from vault: %v", testString)
 	}
 
