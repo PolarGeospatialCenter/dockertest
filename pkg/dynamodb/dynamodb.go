@@ -20,6 +20,9 @@ func Run(ctx context.Context) (*Instance, error) {
 	}
 
 	err := i.Container.Run(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("unable to start dynamodb: %v", err)
+	}
 
 	port, err := i.GetPort(ctx, "8000/tcp")
 	if err != nil {
