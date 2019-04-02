@@ -16,7 +16,7 @@ type Instance struct {
 
 func Run(ctx context.Context) (*Instance, error) {
 	i := &Instance{
-		Container: &docker.Container{Image: "docker.io/deangiberson/aws-dynamodb-local"},
+		Container: &docker.Container{Image: "docker.io/amazon/dynamodb-local"},
 	}
 
 	err := i.Container.Run(ctx)
